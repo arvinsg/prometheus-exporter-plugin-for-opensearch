@@ -32,6 +32,8 @@ import org.opensearch.indices.NodeIndicesStats;
 import org.opensearch.indices.breaker.AllCircuitBreakerStats;
 import org.opensearch.indices.breaker.CircuitBreakerStats;
 import org.opensearch.ingest.IngestStats;
+import org.opensearch.metrics.PrometheusMetric;
+import org.opensearch.metrics.PrometheusMetricRegistration;
 import org.opensearch.monitor.fs.FsInfo;
 import org.opensearch.monitor.jvm.JvmStats;
 import org.opensearch.monitor.os.OsStats;
@@ -91,6 +93,20 @@ public class PrometheusMetricsCollector {
         registerOsMetrics();
         registerFsMetrics();
         registerESSettings();
+    }
+
+    public void registerAndUpdateCoordinatorMetrics(
+            String nodeName,
+            String nodeID,
+            List<PrometheusMetricRegistration> registrations,
+            List<PrometheusMetric> metrics) {
+        for (PrometheusMetricRegistration registration : registrations) {
+            catalog.registerNodeGauge(registration.name(), registration.help(), registration.labels());
+        }
+        for (PrometheusMetric metric : metrics) {
+            Tuple<String, String> nodeInfo = new Tuple<>(nodeName, nodeID);
+            catalog.setNodeGauge(nodeInfo, metric.name(), metric.value(), metric.labelValues());
+        }
     }
 
     private void registerClusterMetrics() {

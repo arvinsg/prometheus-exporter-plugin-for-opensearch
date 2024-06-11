@@ -32,6 +32,9 @@ import org.opensearch.common.network.NetworkAddress;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.metrics.CoordinatorIndexMetricCollector;
+import org.opensearch.metrics.PrometheusMetric;
+import org.opensearch.metrics.PrometheusMetricRegistration;
 import org.opensearch.rest.*;
 import org.opensearch.rest.action.RestResponseListener;
 
@@ -50,7 +53,7 @@ public class RestPrometheusMetricsAction extends BaseRestHandler {
     static Setting.Validator<String> indexPrefixValidator = value -> {
         if (value == null || value.isEmpty()) {
             throw new IllegalArgumentException(
-                METRIC_PREFIX_KEY + " value ["+value+"] is not valid"
+                    METRIC_PREFIX_KEY + " value [" + value + "] is not valid"
             );
         }
     };
@@ -64,15 +67,20 @@ public class RestPrometheusMetricsAction extends BaseRestHandler {
     private final String metricPrefix;
     private final PrometheusSettings prometheusSettings;
     private final Logger logger = LogManager.getLogger(getClass());
+    private final CoordinatorIndexMetricCollector coordinatorMetricCollector;
+
 
     /**
      * A constructor.
-     * @param settings Settings
+     *
+     * @param settings        Settings
      * @param clusterSettings Cluster settings
+     * @param coordinatorMetricCollector index metric collector
      */
-    public RestPrometheusMetricsAction(Settings settings, ClusterSettings clusterSettings) {
+    public RestPrometheusMetricsAction(Settings settings, ClusterSettings clusterSettings, CoordinatorIndexMetricCollector coordinatorMetricCollector) {
         this.prometheusSettings = new PrometheusSettings(settings, clusterSettings);
         this.metricPrefix = METRIC_PREFIX.get(settings);
+        this.coordinatorMetricCollector = coordinatorMetricCollector;
         if (logger.isTraceEnabled()) {
             logger.trace("Prometheus metric prefix set to [{}]", this.metricPrefix);
         }
@@ -81,7 +89,7 @@ public class RestPrometheusMetricsAction extends BaseRestHandler {
     @Override
     public List<Route> routes() {
         return unmodifiableList(asList(
-            new Route(GET, "/_prometheus/metrics"))
+                new Route(GET, "/_prometheus/metrics"))
         );
     }
 
@@ -90,8 +98,8 @@ public class RestPrometheusMetricsAction extends BaseRestHandler {
         return "prometheus_metrics_action";
     }
 
-     // This method does not throw any IOException because there are no request parameters to be parsed
-     // and processed. This may change in the future.
+    // This method does not throw any IOException because there are no request parameters to be parsed
+    // and processed. This may change in the future.
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) {
         if (logger.isTraceEnabled()) {
@@ -130,6 +138,11 @@ public class RestPrometheusMetricsAction extends BaseRestHandler {
                             collector.updateMetrics(
                                     nodeName, nodeId, response.getClusterHealth(), response.getNodeStats(),
                                     response.getIndicesStats(), response.getClusterStatsData());
+
+                            List<PrometheusMetricRegistration> metricRegistrations = coordinatorMetricCollector.getMetricRegistrations();
+                            List<PrometheusMetric> metrics = coordinatorMetricCollector.flushMetrics();
+                            collector.registerAndUpdateCoordinatorMetrics(nodeName, nodeId, metricRegistrations, metrics);
+
                             textContent = collector.getTextContent();
                         } catch (Exception ex) {
                             // We use try-catch block to catch exception from Prometheus catalog and collector processing
