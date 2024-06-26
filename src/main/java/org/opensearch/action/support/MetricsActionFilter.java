@@ -67,7 +67,7 @@ public class MetricsActionFilter implements ActionFilter {
                     task,
                     action,
                     request,
-                    new MetricsActionListener<>(listener, task, action, metricCollector, request)
+                    new MetricsActionListener<>(listener, task, metricCollector, request)
             );
         } else {
             chain.proceed(task, action, request, listener);

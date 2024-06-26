@@ -35,7 +35,11 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.metrics.CoordinatorIndexMetricCollector;
 import org.opensearch.metrics.PrometheusMetric;
 import org.opensearch.metrics.PrometheusMetricRegistration;
-import org.opensearch.rest.*;
+import org.opensearch.rest.BytesRestResponse;
+import org.opensearch.rest.BaseRestHandler;
+import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.RestResponse;
+import org.opensearch.rest.RestStatus;
 import org.opensearch.rest.action.RestResponseListener;
 
 import java.util.List;
@@ -72,8 +76,7 @@ public class RestPrometheusMetricsAction extends BaseRestHandler {
 
     /**
      * A constructor.
-     *
-     * @param settings        Settings
+     * @param settings Settings
      * @param clusterSettings Cluster settings
      * @param coordinatorMetricCollector index metric collector
      */
@@ -89,7 +92,7 @@ public class RestPrometheusMetricsAction extends BaseRestHandler {
     @Override
     public List<Route> routes() {
         return unmodifiableList(asList(
-                new Route(GET, "/_prometheus/metrics"))
+            new Route(GET, "/_prometheus/metrics"))
         );
     }
 

@@ -14,8 +14,6 @@ public class MetricsActionListener<Request extends ActionRequest, Response> impl
 
     private final Task task;
 
-    private final String actionName;
-
     private final CoordinatorIndexMetricCollector metricCollector;
 
     private final Request request;
@@ -23,13 +21,11 @@ public class MetricsActionListener<Request extends ActionRequest, Response> impl
     public MetricsActionListener(
             ActionListener<Response> delegate,
             Task task,
-            String actionName,
             CoordinatorIndexMetricCollector metricCollector,
             Request request
     ) {
         this.delegate = delegate;
         this.task = task;
-        this.actionName = actionName;
         this.metricCollector = metricCollector;
         this.request = request;
     }

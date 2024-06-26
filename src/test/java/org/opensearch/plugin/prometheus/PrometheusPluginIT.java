@@ -26,6 +26,7 @@ import org.opensearch.client.Response;
 import org.opensearch.client.RestClient;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.test.OpenSearchIntegTestCase;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -39,7 +40,6 @@ public class PrometheusPluginIT extends OpenSearchIntegTestCase {
     protected Collection<Class<? extends Plugin>> nodePlugins() {
         return Arrays.asList(PrometheusExporterPlugin.class);
     }
-
 
     /**
      * Plugin must be installed on every cluster node.
