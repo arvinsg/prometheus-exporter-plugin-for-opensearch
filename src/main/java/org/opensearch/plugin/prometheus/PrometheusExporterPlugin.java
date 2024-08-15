@@ -19,6 +19,7 @@ package org.opensearch.plugin.prometheus;
 
 import static java.util.Collections.singletonList;
 import static org.opensearch.action.support.MetricsActionFilter.PROMETHEUS_COORDINATOR_METRICS_ENABLED_SETTINGS;
+import static org.opensearch.action.support.MetricsActionFilter.PROMETHEUS_TASK_RESOURCE_TRACK_ENABLED_SETTINGS;
 
 import java.util.Collection;
 import org.apache.logging.log4j.LogManager;
@@ -122,7 +123,8 @@ public class PrometheusExporterPlugin extends Plugin implements ActionPlugin {
                 PrometheusSettings.PROMETHEUS_SELECTED_INDICES,
                 PrometheusSettings.PROMETHEUS_SELECTED_OPTION,
                 RestPrometheusMetricsAction.METRIC_PREFIX,
-                PROMETHEUS_COORDINATOR_METRICS_ENABLED_SETTINGS
+                PROMETHEUS_COORDINATOR_METRICS_ENABLED_SETTINGS,
+                PROMETHEUS_TASK_RESOURCE_TRACK_ENABLED_SETTINGS
         );
         return Collections.unmodifiableList(settings);
     }

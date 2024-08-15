@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiFunction;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.opensearch.common.metrics.CounterMetric;
 import org.opensearch.common.util.concurrent.ConcurrentCollections;
 
 public class CoordinatorIndexMetricCollector {
@@ -21,6 +22,10 @@ public class CoordinatorIndexMetricCollector {
     public static final String P99_METRIC_SUFFIX = "_p99";
     public static final String AVERAGE_METRIC_SUFFIX = "_average";
     public static final String COUNT_METRIC_SUFFIX = "_count";
+
+    public static final String INDEX_SHARD_CPU_RESOURCE_METRIC = "index_shard_cpu";
+    public static final String INDEX_SHARD_MEMORY_RESOURCE_METRIC = "index_shard_memory";
+
     public static final List<PrometheusMetricRegistration> metricRegistrations;
 
     static {
@@ -38,6 +43,9 @@ public class CoordinatorIndexMetricCollector {
         mrs.add(makeRegistration(BULK_LATENCY_METRIC_PREFIX + P90_METRIC_SUFFIX));
         mrs.add(makeRegistration(BULK_LATENCY_METRIC_PREFIX + P95_METRIC_SUFFIX));
         mrs.add(makeRegistration(BULK_LATENCY_METRIC_PREFIX + P99_METRIC_SUFFIX));
+
+        mrs.add(makeResourceTrackRegistration(INDEX_SHARD_CPU_RESOURCE_METRIC));
+        mrs.add(makeResourceTrackRegistration(INDEX_SHARD_MEMORY_RESOURCE_METRIC));
         metricRegistrations = Collections.unmodifiableList(mrs);
     }
 
@@ -51,9 +59,18 @@ public class CoordinatorIndexMetricCollector {
         return new PrometheusMetricRegistration(metricName, new String[]{"index", "success"}, metricName);
     }
 
+    private static PrometheusMetricRegistration makeResourceTrackRegistration(String metricName) {
+        return new PrometheusMetricRegistration(metricName, new String[]{"index", "shard", "operation"}, metricName);
+    }
+
     public void recordHistogram(PrometheusMetricContext context, long value) {
         HistogramMetric histogram = collector.histograms.computeIfAbsent(context, k -> new HistogramMetric());
         histogram.add(value);
+    }
+
+    public void recordCounter(PrometheusMetricContext context, long value) {
+        CounterMetric counter = collector.counters.computeIfAbsent(context, k -> new CounterMetric());
+        counter.inc(value);
     }
 
     public void recordSearchLatency(String index, boolean success, long latency) {
@@ -64,6 +81,16 @@ public class CoordinatorIndexMetricCollector {
     public void recordBulkLatency(String index, boolean success, long latency) {
         final PrometheusMetricContext context = PrometheusMetricContext.of(BULK_LATENCY_METRIC_PREFIX, index, success ? "true" : "false");
         recordHistogram(context, latency);
+    }
+
+    public void recordIndexShardMemoryResourceMetric(String index, String shard, String op, long value) {
+        final PrometheusMetricContext context = PrometheusMetricContext.of(INDEX_SHARD_MEMORY_RESOURCE_METRIC, index, shard, op);
+        recordCounter(context, value);
+    }
+
+    public void recordIndexShardCPUResourceMetric(String index, String shard, String op, long value) {
+        final PrometheusMetricContext context = PrometheusMetricContext.of(INDEX_SHARD_CPU_RESOURCE_METRIC, index, shard, op);
+        recordCounter(context, value);
     }
 
     public List<PrometheusMetricRegistration> getMetricRegistrations() {
@@ -81,8 +108,17 @@ public class CoordinatorIndexMetricCollector {
             final Histogram histogram = entry.getValue().getHistogram();
             flushHistogramMetric(context, histogram, metricList);
         }
+
+        // flush counters
+        for (Map.Entry<PrometheusMetricContext, CounterMetric> entry : snapshot.counters.entrySet()) {
+            final PrometheusMetricContext context = entry.getKey();
+            final CounterMetric counter = entry.getValue();
+            metricList.add(new PrometheusMetric(context.name(), context.labelValues(), counter.count()));
+        }
+
         return metricList;
     }
+
 
     private void flushHistogramMetric(
             final PrometheusMetricContext context,
@@ -103,5 +139,7 @@ public class CoordinatorIndexMetricCollector {
         ConcurrentMap<PrometheusMetricContext, HistogramMetric> histograms =
                 ConcurrentCollections.newConcurrentMapWithAggressiveConcurrency();
         // add other types of metrics here, like counter
+        ConcurrentMap<PrometheusMetricContext, CounterMetric> counters =
+                ConcurrentCollections.newConcurrentMapWithAggressiveConcurrency();
     }
 }
