@@ -32,7 +32,7 @@ import org.opensearch.common.network.NetworkAddress;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.metrics.CoordinatorIndexMetricCollector;
+import org.opensearch.metrics.IndexMetricCollector;
 import org.opensearch.metrics.PrometheusMetric;
 import org.opensearch.metrics.PrometheusMetricRegistration;
 import org.opensearch.rest.BytesRestResponse;
@@ -71,7 +71,7 @@ public class RestPrometheusMetricsAction extends BaseRestHandler {
     private final String metricPrefix;
     private final PrometheusSettings prometheusSettings;
     private final Logger logger = LogManager.getLogger(getClass());
-    private final CoordinatorIndexMetricCollector coordinatorMetricCollector;
+    private final IndexMetricCollector coordinatorMetricCollector;
 
 
     /**
@@ -80,7 +80,7 @@ public class RestPrometheusMetricsAction extends BaseRestHandler {
      * @param clusterSettings Cluster settings
      * @param coordinatorMetricCollector index metric collector
      */
-    public RestPrometheusMetricsAction(Settings settings, ClusterSettings clusterSettings, CoordinatorIndexMetricCollector coordinatorMetricCollector) {
+    public RestPrometheusMetricsAction(Settings settings, ClusterSettings clusterSettings, IndexMetricCollector coordinatorMetricCollector) {
         this.prometheusSettings = new PrometheusSettings(settings, clusterSettings);
         this.metricPrefix = METRIC_PREFIX.get(settings);
         this.coordinatorMetricCollector = coordinatorMetricCollector;

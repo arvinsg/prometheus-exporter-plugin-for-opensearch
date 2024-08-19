@@ -9,10 +9,11 @@ import java.util.function.BiFunction;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.common.metrics.CounterMetric;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ConcurrentCollections;
 
-public class CoordinatorIndexMetricCollector {
-    public static final Logger logger = LogManager.getLogger(CoordinatorIndexMetricCollector.class);
+public class IndexMetricCollector {
+    public static final Logger logger = LogManager.getLogger(IndexMetricCollector.class);
 
     public static final String SEARCH_LATENCY_METRIC_PREFIX = "coordinator_search_latency_millis";
     public static final String BULK_LATENCY_METRIC_PREFIX = "coordinator_bulk_latency_millis";
@@ -23,8 +24,10 @@ public class CoordinatorIndexMetricCollector {
     public static final String AVERAGE_METRIC_SUFFIX = "_average";
     public static final String COUNT_METRIC_SUFFIX = "_count";
 
-    public static final String INDEX_SHARD_CPU_RESOURCE_METRIC = "index_shard_cpu";
-    public static final String INDEX_SHARD_MEMORY_RESOURCE_METRIC = "index_shard_memory";
+    public static final String INDEX_SHARD_CPU_TIME_METRIC = "index_shard_cpu_time_nanosecond";
+    public static final String INDEX_SHARD_CPU_PERCENT_METRIC = "index_shard_cpu_percent";
+
+    public static final String INDEX_SHARD_MEMORY_ALLOCATION_METRIC = "index_shard_memory_allocation_bytes";
 
     public static final List<PrometheusMetricRegistration> metricRegistrations;
 
@@ -44,14 +47,15 @@ public class CoordinatorIndexMetricCollector {
         mrs.add(makeRegistration(BULK_LATENCY_METRIC_PREFIX + P95_METRIC_SUFFIX));
         mrs.add(makeRegistration(BULK_LATENCY_METRIC_PREFIX + P99_METRIC_SUFFIX));
 
-        mrs.add(makeResourceTrackRegistration(INDEX_SHARD_CPU_RESOURCE_METRIC));
-        mrs.add(makeResourceTrackRegistration(INDEX_SHARD_MEMORY_RESOURCE_METRIC));
+        mrs.add(makeResourceTrackRegistration(INDEX_SHARD_CPU_TIME_METRIC));
+        mrs.add(makeResourceTrackRegistration(INDEX_SHARD_CPU_PERCENT_METRIC));
+        mrs.add(makeResourceTrackRegistration(INDEX_SHARD_MEMORY_ALLOCATION_METRIC));
         metricRegistrations = Collections.unmodifiableList(mrs);
     }
 
     private volatile MetricsCollector collector;
 
-    public CoordinatorIndexMetricCollector() {
+    public IndexMetricCollector() {
         collector = new MetricsCollector();
     }
 
@@ -84,12 +88,12 @@ public class CoordinatorIndexMetricCollector {
     }
 
     public void recordIndexShardMemoryResourceMetric(String index, String shard, String op, long value) {
-        final PrometheusMetricContext context = PrometheusMetricContext.of(INDEX_SHARD_MEMORY_RESOURCE_METRIC, index, shard, op);
+        final PrometheusMetricContext context = PrometheusMetricContext.of(INDEX_SHARD_MEMORY_ALLOCATION_METRIC, index, shard, op);
         recordCounter(context, value);
     }
 
     public void recordIndexShardCPUResourceMetric(String index, String shard, String op, long value) {
-        final PrometheusMetricContext context = PrometheusMetricContext.of(INDEX_SHARD_CPU_RESOURCE_METRIC, index, shard, op);
+        final PrometheusMetricContext context = PrometheusMetricContext.of(INDEX_SHARD_CPU_TIME_METRIC, index, shard, op);
         recordCounter(context, value);
     }
 
@@ -110,10 +114,15 @@ public class CoordinatorIndexMetricCollector {
         }
 
         // flush counters
+        long elapsedTime = System.nanoTime() - snapshot.startTime;
         for (Map.Entry<PrometheusMetricContext, CounterMetric> entry : snapshot.counters.entrySet()) {
             final PrometheusMetricContext context = entry.getKey();
             final CounterMetric counter = entry.getValue();
             metricList.add(new PrometheusMetric(context.name(), context.labelValues(), counter.count()));
+            if (context.name().equals(INDEX_SHARD_CPU_TIME_METRIC)) {
+                long cpuUsagePercent = counter.count() / (elapsedTime / 10000);
+                metricList.add(new PrometheusMetric(INDEX_SHARD_CPU_PERCENT_METRIC, context.labelValues(), cpuUsagePercent));
+            }
         }
 
         return metricList;
@@ -136,6 +145,7 @@ public class CoordinatorIndexMetricCollector {
     }
 
     private static class MetricsCollector {
+        long startTime = System.nanoTime();
         ConcurrentMap<PrometheusMetricContext, HistogramMetric> histograms =
                 ConcurrentCollections.newConcurrentMapWithAggressiveConcurrency();
         // add other types of metrics here, like counter

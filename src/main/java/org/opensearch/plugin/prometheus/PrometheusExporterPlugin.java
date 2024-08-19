@@ -18,8 +18,8 @@
 package org.opensearch.plugin.prometheus;
 
 import static java.util.Collections.singletonList;
+import static org.opensearch.action.support.MetricTransportInterceptor.PROMETHEUS_TASK_RESOURCE_TRACK_ENABLED_SETTINGS;
 import static org.opensearch.action.support.MetricsActionFilter.PROMETHEUS_COORDINATOR_METRICS_ENABLED_SETTINGS;
-import static org.opensearch.action.support.MetricsActionFilter.PROMETHEUS_TASK_RESOURCE_TRACK_ENABLED_SETTINGS;
 
 import java.util.Collection;
 import org.apache.logging.log4j.LogManager;
@@ -30,6 +30,7 @@ import org.opensearch.action.ActionResponse;
 import org.opensearch.action.NodePrometheusMetricsAction;
 import org.opensearch.action.TransportNodePrometheusMetricsAction;
 import org.opensearch.action.support.ActionFilter;
+import org.opensearch.action.support.MetricTransportInterceptor;
 import org.opensearch.action.support.MetricsActionFilter;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
@@ -38,11 +39,13 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.SetOnce;
 import org.opensearch.common.io.stream.NamedWriteableRegistry;
 import org.opensearch.common.settings.*;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
-import org.opensearch.metrics.CoordinatorIndexMetricCollector;
+import org.opensearch.metrics.IndexMetricCollector;
 import org.opensearch.plugins.ActionPlugin;
+import org.opensearch.plugins.NetworkPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.rest.RestController;
@@ -55,15 +58,17 @@ import java.util.List;
 import java.util.function.Supplier;
 import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.TransportInterceptor;
 import org.opensearch.watcher.ResourceWatcherService;
 
 /**
  * Prometheus Exporter plugin main class.
  */
-public class PrometheusExporterPlugin extends Plugin implements ActionPlugin {
+public class PrometheusExporterPlugin extends Plugin implements ActionPlugin, NetworkPlugin {
     private static final Logger logger = LogManager.getLogger(PrometheusExporterPlugin.class);
     private final SetOnce<MetricsActionFilter> metricsActionFilter = new SetOnce<>();
-    private final CoordinatorIndexMetricCollector coordinatorIndexMetricCollector = new CoordinatorIndexMetricCollector();
+    private final SetOnce<MetricTransportInterceptor> metricsTransportInterceptor = new SetOnce<>();
+    private final IndexMetricCollector coordinatorIndexMetricCollector = new IndexMetricCollector();
 
     /**
      * A constructor.
@@ -95,6 +100,7 @@ public class PrometheusExporterPlugin extends Plugin implements ActionPlugin {
         this.metricsActionFilter.set(
                 new MetricsActionFilter(clusterService.getSettings(), clusterService.getClusterSettings(), coordinatorIndexMetricCollector)
         );
+        this.metricsTransportInterceptor.set(new MetricTransportInterceptor(clusterService.getSettings(), clusterService.getClusterSettings(), coordinatorIndexMetricCollector));
 
         return Collections.emptyList();
     }
@@ -112,6 +118,11 @@ public class PrometheusExporterPlugin extends Plugin implements ActionPlugin {
         return singletonList(
                 new RestPrometheusMetricsAction(settings, clusterSettings, coordinatorIndexMetricCollector)
         );
+    }
+
+    @Override
+    public List<TransportInterceptor> getTransportInterceptors(NamedWriteableRegistry namedWriteableRegistry, ThreadContext threadContext) {
+        return singletonList(metricsTransportInterceptor.get());
     }
 
     @Override
